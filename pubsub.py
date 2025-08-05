@@ -148,7 +148,7 @@ class PubSubBase():
         self.channels_lock = Lock()
         self.count_lock = Lock()
 
-    def subscribe_(self, channel, is_priority_queue):
+    def subscribe_(self, channel, is_priority_queue, subscriber=None):
         """
         Return a synchronised FIFO queue object used by a subscriber
         to listen at messages sent by publishers on a given channel.
@@ -178,6 +178,9 @@ class PubSubBase():
         else:
             message_queue = ChanelQueue(self, channel)
         self.channels[channel].append(message_queue)
+
+        if subscriber:
+            message_queue.subscriber = subscriber
 
         return message_queue
 
@@ -256,7 +259,11 @@ class PubSubBase():
                 warnings.warn((
                     f"Queue overflow for channel {channel}, "
                     f"> {self.max_queue_in_a_channel} "
-                    "(self.max_queue_in_a_channel parameter)"))
+                    "(self.max_queue_in_a_channel parameter)"
+                    f"Subscriber {channel_queue.subscriber}"))
+                for _queue in self.channels[channel]:
+                    warnings.warn((f"Subscriber {_queue.subscriber} is affected by this overflow"
+                                   f"{_queue.qsize()} messages in queue"))
             else:  # No overflow on this channel_queue
                 # Build and send message for this queue
                 if is_priority_queue:
@@ -285,6 +292,7 @@ class ChanelQueue(Queue):
         super().__init__()
         self.parent = parent
         self.name = channel
+        self.subscriber = ""
 
     def listen(self, block=True, timeout=None):
         """
@@ -381,7 +389,7 @@ class PubSub(PubSubBase):
     implementation and was designed thread-safe by Zhen Wang.
     """
 
-    def subscribe(self, channel):
+    def subscribe(self, channel, subscriber=None):
         """
         Return a synchronised normal FIFO queue object
         used by a subscriber to listen at messages sent
@@ -392,7 +400,7 @@ class PubSub(PubSubBase):
         Parameter:
         - channel : the channel to listen to.
         """
-        return self.subscribe_(channel, False)
+        return self.subscribe_(channel, False, subscriber)
 
     def publish(self, channel, message):
         """
